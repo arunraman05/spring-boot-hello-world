@@ -22,14 +22,14 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main',                   
+                git branch: 'main',
                     url: 'https://github.com/arunraman05/spring-boot-hello-world.git'
             }
         }
 
         stage('Print Path') {
             steps {
-                bat 'echo $PATH'
+                bat 'echo %PATH%'
             }
         }
 
@@ -50,20 +50,20 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                bat 'docker build -t $DOCKER_IMAGE:$BUILD_NUMBER .'
+                bat "docker build -t %DOCKER_IMAGE%:%BUILD_NUMBER% ."
             }
         }
 
         stage('Remove Old Container') {
             steps {
-                bat 'docker rm -f $CONTAINER_NAME || true'
+                bat "docker rm -f %CONTAINER_NAME% || exit 0"
             }
         }
 
         stage('Run New Container') {
             steps {
                 // Map host port 8091 to container port 8080 to avoid conflicts with Jenkins
-                bat 'docker run -d -p 8091:8080 --name=$CONTAINER_NAME $DOCKER_IMAGE:$BUILD_NUMBER'
+                bat "docker run -d -p 8091:8080 --name=%CONTAINER_NAME% %DOCKER_IMAGE%:%BUILD_NUMBER%"
             }
         }
     }
