@@ -1,55 +1,55 @@
-pipeline{
+pipeline {
     agent any
-    tools{
-        maven 'mvn3.9.9'
+
+    // This tells Jenkins to inject your configured Maven tool path automatically
+    tools {
+        maven 'M3' // Must match the exact name you specified in Jenkins Tools
     }
-        environment{
-        DOCKER_IMAGE='simplybyte-calculator-jenkins-local'
-        CONTAINER_NAME='simplybyte-container-calculator'
+
+    environment {
+        DOCKER_IMAGE = 'spring-boot-hello-world:1.0'
+        // Keeping this variable here in case your Windows environment requires localhost routing
+        DOCKER_HOST = 'tcp://localhost:2375' 
     }
-    parameters{
-            choice(name: 'ENVIRONMENT' , choices: ['testing','prod'], description: 'environemnt')
-    }
-    stages{
-        stage('git clone'){
-            steps{
-                git branch: 'main', credentialsId: 'github_simplybyte_credentials', url: 'https://github.com/simplybyte1266/simplybyte-springboot.git'
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/arunraman05/spring-boot-hello-world.git', branch: 'main'
             }
         }
-        stage('print path'){
-            steps{
-                sh 'echo $PATH'
+
+        stage('Maven Build') {
+            steps {
+                bat 'mvn clean install -DskipTests'
             }
         }
-        stage('maven test stage'){
-            when{
-                expression{
-                    params.ENVIRONMENT == 'testing'
+
+        stage('Docker Build') {
+            steps {
+                script {
+                    bat "docker build -t ${env.DOCKER_IMAGE} ."
                 }
             }
-            steps{
-                sh 'mvn test'
+        }
+
+        stage('Docker Run') {
+            steps {
+                script {
+                    // Added -d flag so the container runs in detached mode background. 
+                    // Otherwise, Jenkins will hang indefinitely keeping the pipeline running.
+                    bat "docker run -d -p 8080:8080 ${env.DOCKER_IMAGE}"
+                }
             }
         }
-        stage('maven build stage'){
-            steps{
-                sh 'mvn clean install -DskipTests=true'
-            }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed and application is running on port 8080!'
         }
-        stage('Docker image build'){
-            steps{
-                sh 'docker build -t $DOCKER_IMAGE:$BUILD_NUMBER .'
-            }
-        }
-        stage('Docker old container remove'){
-            steps{
-                sh 'docker rm -f $CONTAINER_NAME || true'
-            }
-        }
-        stage('Docker new container run'){
-            steps{
-                sh 'docker run -d -p 8091:8090 --name=$CONTAINER_NAME $DOCKER_IMAGE:$BUILD_NUMBER'
-            }
+        failure {
+            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
