@@ -1,55 +1,79 @@
 pipeline {
     agent any
 
-    // This tells Jenkins to inject your configured Maven tool path automatically
     tools {
-        maven 'M3' // Must match the exact name you specified in Jenkins Tools
+        // Use the Maven tool configured in Jenkins (must match the name in Jenkins global tools)
+        maven 'M3'
     }
 
     environment {
-        DOCKER_IMAGE = 'spring-boot-hello-world:1.0'
-        // Keeping this variable here in case your Windows environment requires localhost routing
-        DOCKER_HOST = 'tcp://localhost:2375' 
+        DOCKER_IMAGE   = 'spring-boot-hello-world'
+        CONTAINER_NAME = 'spring-boot-hello-world-container'
+    }
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['testing', 'prod'],
+            description: 'Select environment to run pipeline'
+        )
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git url: 'https://github.com/arunraman05/spring-boot-hello-world.git', branch: 'main'
+                git branch: 'main',                   
+                    url: 'https://github.com/arunraman05/spring-boot-hello-world.git'
+            }
+        }
+
+        stage('Print Path') {
+            steps {
+                bat 'echo $PATH'
+            }
+        }
+
+        stage('Maven Test') {
+            when {
+                expression { params.ENVIRONMENT == 'testing' }
+            }
+            steps {
+                bat 'mvn test'
             }
         }
 
         stage('Maven Build') {
             steps {
-                bat 'mvn clean install -DskipTests'
+                bat 'mvn clean install -DskipTests=true'
             }
         }
 
         stage('Docker Build') {
             steps {
-                script {
-                    bat "docker build -t ${env.DOCKER_IMAGE} ."
-                }
+                bat 'docker build -t $DOCKER_IMAGE:$BUILD_NUMBER .'
             }
         }
 
-        stage('Docker Run') {
+        stage('Remove Old Container') {
             steps {
-                script {
-                    // Added -d flag so the container runs in detached mode background. 
-                    // Otherwise, Jenkins will hang indefinitely keeping the pipeline running.
-                    bat "docker run -d -p 8080:8080 ${env.DOCKER_IMAGE}"
-                }
+                bat 'docker rm -f $CONTAINER_NAME || true'
+            }
+        }
+
+        stage('Run New Container') {
+            steps {
+                // Map host port 8091 to container port 8080 to avoid conflicts with Jenkins
+                bat 'docker run -d -p 8091:8080 --name=$CONTAINER_NAME $DOCKER_IMAGE:$BUILD_NUMBER'
             }
         }
     }
-    
+
     post {
         success {
-            echo 'Pipeline completed and application is running on port 8080!'
+            echo "Pipeline completed successfully. Application is running at http://localhost:8091"
         }
         failure {
-            echo 'Pipeline failed. Check logs for details.'
+            echo "Pipeline failed. Check logs for details."
         }
     }
 }
